@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Redefinir Senha</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        #reset-box { background: #fff; padding: 32px 24px; border-radius: 8px; box-shadow: 0 2px 8px #0001; min-width: 300px; }
+        input { display: block; width: 100%; margin-bottom: 12px; padding: 8px; font-size: 16px; }
+        button { width: 100%; padding: 10px; background: #3498db; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        #reset-erro { color: #e74c3c; margin-bottom: 8px; }
+        #reset-ok { color: #27ae60; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div id="reset-box">
+        <h2>Redefinir Senha</h2>
+        <form id="form-reset">
+            <input type="password" id="nova-senha" placeholder="Nova senha" required />
+            <input type="password" id="confirma-senha" placeholder="Confirme a nova senha" required />
+            <button type="submit">Redefinir</button>
+        </form>
+        <div id="reset-erro"></div>
+        <div id="reset-ok"></div>
+        <a href="login.html">Voltar ao login</a>
+    </div>
+    <script>
+    // Função para obter o token da URL
+    function getTokenFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('token');
+    }
+    document.getElementById('form-reset').onsubmit = async function(e) {
+        e.preventDefault();
+        document.getElementById('reset-erro').innerText = '';
+        document.getElementById('reset-ok').innerText = '';
+        const senha = document.getElementById('nova-senha').value;
+        const confirma = document.getElementById('confirma-senha').value;
+        if (senha !== confirma) {
+            document.getElementById('reset-erro').innerText = 'As senhas não coincidem.';
+            return;
+        }
+        const token = getTokenFromUrl();
+        if (!token) {
+            document.getElementById('reset-erro').innerText = 'Token inválido ou ausente.';
+            return;
+        }
+        try {
+            const resp = await fetch('https://seudominio-backend.onrender.com/api/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, password: senha })
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                document.getElementById('reset-ok').innerText = 'Senha redefinida com sucesso!';
+            } else {
+                document.getElementById('reset-erro').innerText = data.error || 'Erro ao redefinir senha.';
+            }
+        } catch (err) {
+            document.getElementById('reset-erro').innerText = 'Erro de conexão.';
+        }
+    };
+    </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Planejador 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Poppins', Arial, sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        #login-box { background: #fff; padding: 32px 24px; border-radius: 8px; box-shadow: 0 2px 8px #0001; min-width: 300px; }
+        h2, h3 { font-weight: 600; letter-spacing: 1px; color: #2d3436; margin-bottom: 8px; }
+        input { display: block; width: 100%; margin-bottom: 12px; padding: 8px; font-size: 16px; border: 1px solid #dfe6e9; border-radius: 4px; font-family: 'Poppins', Arial, sans-serif; }
+        button { width: 100%; padding: 10px; background: #2ecc71; color: #fff; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; letter-spacing: 1px; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #27ae60; }
+        #login-erro { color: #e74c3c; margin-bottom: 8px; }
+        a { color: #3498db; text-decoration: none; font-size: 15px; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div id="login-box">
+        <img src="img/logo-marcenaria-pro.png" alt="Logo Marcenaria_PRO" style="max-width:180px;display:block;margin:0 auto 12px auto;">
+        <h2>Marcenaria_PRO</h2>
+        <div style="font-size:18px;color:#636e72;margin-bottom:8px;">Planejador 3D</div>
+        <h3>Login</h3>
+        <form id="form-login">
+            <input type="text" id="login-usuario" placeholder="Usuário" required />
+            <input type="password" id="login-senha" placeholder="Senha" required oninput="verificarForcaSenhaLogin()" />
+            <div id="senha-strength-bar-login" style="height:8px;width:100%;background:#eee;border-radius:4px;margin-bottom:8px;overflow:hidden">
+                <div id="senha-strength-login" style="height:100%;width:0;background:#e74c3c;transition:width 0.3s"></div>
+            </div>
+            <ul id="senha-dicas-login" style="font-size:13px;color:#636e72;margin-bottom:8px;padding-left:18px;text-align:left">
+                <li id="dica-tam-login">Mínimo 8 caracteres</li>
+                <li id="dica-mai-login">Letra maiúscula</li>
+                <li id="dica-min-login">Letra minúscula</li>
+                <li id="dica-num-login">Número</li>
+                <li id="dica-esp-login">Caractere especial</li>
+            </ul>
+            <button type="submit">Entrar</button>
+        </form>
+        <div id="login-erro"></div>
+        <a href="register.html">Não tem conta? Cadastre-se</a>
+    </div>
+    <script>
+    function verificarForcaSenhaLogin() {
+        const senha = document.getElementById('login-senha').value;
+        let forca = 0;
+        // Critérios
+        const temTam = senha.length >= 8;
+        const temMai = /[A-Z]/.test(senha);
+        const temMin = /[a-z]/.test(senha);
+        const temNum = /[0-9]/.test(senha);
+        const temEsp = /[^A-Za-z0-9]/.test(senha);
+        // Dicas visuais
+        document.getElementById('dica-tam-login').style.color = temTam ? '#27ae60' : '#636e72';
+        document.getElementById('dica-mai-login').style.color = temMai ? '#27ae60' : '#636e72';
+        document.getElementById('dica-min-login').style.color = temMin ? '#27ae60' : '#636e72';
+        document.getElementById('dica-num-login').style.color = temNum ? '#27ae60' : '#636e72';
+        document.getElementById('dica-esp-login').style.color = temEsp ? '#27ae60' : '#636e72';
+        forca = temTam + temMai + temMin + temNum + temEsp;
+        // Barra
+        const barra = document.getElementById('senha-strength-login');
+        barra.style.width = (forca * 20) + '%';
+        barra.style.background = forca <= 2 ? '#e74c3c' : (forca === 3 ? '#f1c40f' : (forca === 4 ? '#3498db' : '#27ae60'));
+    }
+
+    document.getElementById('form-login').onsubmit = async function(e) {
+        e.preventDefault();
+        const email = document.getElementById('login-usuario').value;
+        const password = document.getElementById('login-senha').value;
+        try {
+            const resp = await fetch('https://seudominio-backend.onrender.com/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            if (!resp.ok) throw new Error('Erro na resposta do servidor.');
+            const data = await resp.json();
+            if (data.ok) {
+                localStorage.setItem('token', data.token);
+                window.location.href = 'index.html';
+            } else {
+                document.getElementById('login-erro').innerText = data.error || 'Usuário ou senha inválidos';
+            }
+        } catch (err) {
+            document.getElementById('login-erro').innerText = 'Erro de conexão. Rode o projeto em http://localhost:3000 e verifique o backend.';
+        }
+    };
+    // Se já estiver logado, vai direto para o sistema
+    if (localStorage.getItem('token')) {
+        window.location.href = 'index.html';
+    }
+    </script>
+</body>
+</html>

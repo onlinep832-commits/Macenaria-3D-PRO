@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Cadastro - Planejador 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        #register-box { background: #fff; padding: 32px 24px; border-radius: 8px; box-shadow: 0 2px 8px #0001; min-width: 300px; }
+        input { display: block; width: 100%; margin-bottom: 12px; padding: 8px; font-size: 16px; }
+        button { width: 100%; padding: 10px; background: #3498db; color: #fff; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        #register-erro { color: #e74c3c; margin-bottom: 8px; }
+        #register-ok { color: #27ae60; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div id="register-box">
+        <h2>Cadastro</h2>
+        <form id="form-register">
+            <input type="text" id="register-usuario" placeholder="Usuário" required />
+            <input type="email" id="register-email" placeholder="E-mail" required style="margin-bottom:12px" />
+            <input type="password" id="register-senha" placeholder="Senha" required oninput="verificarForcaSenha()" />
+            <div id="senha-strength-bar" style="height:8px;width:100%;background:#eee;border-radius:4px;margin-bottom:8px;overflow:hidden">
+                <div id="senha-strength" style="height:100%;width:0;background:#e74c3c;transition:width 0.3s"></div>
+            </div>
+            <ul id="senha-dicas" style="font-size:13px;color:#636e72;margin-bottom:8px;padding-left:18px;text-align:left">
+                <li id="dica-tam">Mínimo 8 caracteres</li>
+                <li id="dica-mai">Letra maiúscula</li>
+                <li id="dica-min">Letra minúscula</li>
+                <li id="dica-num">Número</li>
+                <li id="dica-esp">Caractere especial</li>
+            </ul>
+            <button type="submit">Cadastrar</button>
+        </form>
+        <div id="register-erro"></div>
+        <div id="register-ok"></div>
+        <a href="login.html">Já tem conta? Entrar</a>
+    </div>
+    <script>
+    function verificarForcaSenha() {
+        const senha = document.getElementById('register-senha').value;
+        let forca = 0;
+        // Critérios
+        const temTam = senha.length >= 8;
+        const temMai = /[A-Z]/.test(senha);
+        const temMin = /[a-z]/.test(senha);
+        const temNum = /[0-9]/.test(senha);
+        const temEsp = /[^A-Za-z0-9]/.test(senha);
+        // Dicas visuais
+        document.getElementById('dica-tam').style.color = temTam ? '#27ae60' : '#636e72';
+        document.getElementById('dica-mai').style.color = temMai ? '#27ae60' : '#636e72';
+        document.getElementById('dica-min').style.color = temMin ? '#27ae60' : '#636e72';
+        document.getElementById('dica-num').style.color = temNum ? '#27ae60' : '#636e72';
+        document.getElementById('dica-esp').style.color = temEsp ? '#27ae60' : '#636e72';
+        forca = temTam + temMai + temMin + temNum + temEsp;
+        // Barra
+        const barra = document.getElementById('senha-strength');
+        barra.style.width = (forca * 20) + '%';
+        barra.style.background = forca <= 2 ? '#e74c3c' : (forca === 3 ? '#f1c40f' : (forca === 4 ? '#3498db' : '#27ae60'));
+    }
+
+    document.getElementById('form-register').onsubmit = async function(e) {
+        e.preventDefault();
+        document.getElementById('register-erro').innerText = '';
+        document.getElementById('register-ok').innerText = '';
+        const username = document.getElementById('register-usuario').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-senha').value;
+        // Validação extra antes de enviar
+        if (password.length < 8 ||
+            !/[A-Z]/.test(password) ||
+            !/[a-z]/.test(password) ||
+            !/[0-9]/.test(password) ||
+            !/[^A-Za-z0-9]/.test(password)) {
+            document.getElementById('register-erro').innerText = 'A senha deve atender todos os requisitos.';
+            return;
+        }
+        try {
+            // Use o endereço relativo, que funciona em http://localhost:8080/register.html
+            const resp = await fetch('https://seudominio-backend.onrender.com/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, email, password })
+            });
+            if (!resp.ok) throw new Error('Erro na resposta do servidor.');
+            const data = await resp.json();
+            if (data.ok) {
+                document.getElementById('register-ok').innerText = 'Cadastro realizado! Faça login.';
+            } else {
+                document.getElementById('register-erro').innerText = data.error || 'Erro ao cadastrar.';
+            }
+        } catch (err) {
+            document.getElementById('register-erro').innerText = 'Erro de conexão. Rode o projeto em http://localhost:8080 e verifique o backend.';
+        }
+    };
+    // Se já estiver logado, vai direto para o sistema
+    if (localStorage.getItem('token')) {
+        window.location.href = 'index.html';
+    }
+    </script>
+</body>
+</html>

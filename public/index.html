@@ -1,0 +1,568 @@
+        <script>
+        // Redireciona para login se não estiver autenticado
+        if (!localStorage.getItem('token')) {
+            window.location.href = 'login.html';
+        }
+        </script>
+    <div id="login-area">
+        <h3>Login</h3>
+        <form id="form-login">
+            <input type="text" id="login-usuario" placeholder="Usuário" required />
+            <input type="password" id="login-senha" placeholder="Senha" required />
+            <button type="submit">Entrar</button>
+        </form>
+        <div id="login-erro" style="color:red;"></div>
+    </div>
+    <script>
+    // Função para decodificar JWT (payload base64)
+    function parseJwt (token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        } catch (e) { return {}; }
+    }
+
+    // Login simples
+    document.getElementById('form-login').onsubmit = async function(e) {
+        e.preventDefault();
+        const usuario = document.getElementById('login-usuario').value;
+        const senha = document.getElementById('login-senha').value;
+        const resp = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, senha })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            localStorage.setItem('token', data.token);
+            document.getElementById('login-area').style.display = 'none';
+            document.getElementById('painel-downloads').style.display = '';
+            document.getElementById('form-upload').style.display = '';
+            mostrarBoasVindas();
+        } else {
+            document.getElementById('login-erro').innerText = 'Usuário ou senha inválidos';
+        }
+    };
+
+    // Função para mostrar mensagem de boas-vindas e botão de logout
+    function mostrarBoasVindas() {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const payload = parseJwt(token);
+            let nome = payload.nome || payload.usuario || payload.user || 'Usuário';
+            document.getElementById('welcome-msg').innerText = `Bem-vindo(a), ${nome}!`;
+            document.getElementById('welcome-bar').style.display = 'flex';
+        }
+    }
+
+    // Botão de logout
+    document.getElementById('logout-btn').onclick = function() {
+        localStorage.removeItem('token');
+        window.location.href = 'login.html';
+    };
+
+    // Esconde painel de downloads/upload até login
+    if (!localStorage.getItem('token')) {
+        document.getElementById('painel-downloads').style.display = 'none';
+        document.getElementById('form-upload').style.display = 'none';
+        document.getElementById('welcome-bar').style.display = 'none';
+    } else {
+        document.getElementById('login-area').style.display = 'none';
+        mostrarBoasVindas();
+    }
+    </script>
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Planejador 3D - Pro</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script>
+        if (window.location.protocol === 'file:') {
+            console.warn('Atenção: carregue este arquivo via servidor local (ex: python -m http.server) para importmap + modules funcionarem corretamente.');
+        }
+    </script>
+</head>
+
+<body>
+    <div id="welcome-bar" style="display:none;align-items:center;justify-content:space-between;padding:12px 20px;background:#f8f9fa;border-bottom:1px solid #e0e0e0;font-family:'Poppins',sans-serif;font-size:16px">
+        <span id="welcome-msg"></span>
+        <button id="logout-btn" style="background:#e74c3c;color:#fff;border:none;padding:7px 18px;border-radius:5px;font-size:15px;cursor:pointer;font-family:'Poppins',sans-serif;">Sair</button>
+    </div>
+    <div id="barra-sup">
+        <div id="categorias-bar"></div>
+        <div id="subcategorias-bar"></div>
+        <div id="lista-botoes-wrap">
+            <h2>📐 Módulos</h2>
+            <div id="lista-botoes"></div>
+        </div>
+    </div>
+
+    <div id="area-cont">
+        <div id="menu-lat">
+            <h3>🏠 Ambiente</h3>
+            <button class="bm b-amb" id="btn-cfg-sala">⚙️ Configurar Sala</button>
+            <button class="bm b-amb" id="btn-tex-piso">🟫 Piso</button>
+            <button class="bm b-amb" id="btn-tex-par">🧱 Paredes Fixas</button>
+            <button class="bm b-amb" id="btn-tex-teto">⬜ Teto</button>
+            <button class="bm b-amb" id="btn-cor-bg">🌑 Fundo 3D</button>
+            <div class="sep"></div>
+            <h3>🧱 Construção</h3>
+            <button class="bm b-par" id="btn-nova-par">➕ Nova Parede</button>
+            <button class="bm b-par" id="btn-del-par-fixa">🗑️ Editar Paredes Fixas</button>
+            <div class="sep"></div>
+            <h3>📊 Relatórios</h3>
+            <button class="bm b-orc" id="btn-orc">💲 Orçamento (PDF)</button>
+            <button class="bm b-prod" id="btn-prod">📝 Produção (PDF)</button>
+            <button class="bm b-corte" id="btn-txt">💾 Exportar CorteCloud</button>
+            <button class="bm b-plan" id="btn-csv">📊 Planilha (Excel)</button>
+            <button class="bm b-rel" id="btn-rel">📋 Matéria-Prima</button>
+            <div class="sep"></div>
+            <h3>💾 Projeto</h3>
+            <button class="bm b-proj" id="btn-salvar-proj">💾 Salvar Projeto</button>
+            <button class="bm b-proj" id="btn-carregar-proj">📂 Carregar Projeto</button>
+            <div class="sep"></div>
+            <button class="bm b-limp" id="btn-limpar">🗑️ Limpar Tudo</button>
+            <div id="painel-amb">
+                <h4>⚙️ Sala</h4>
+                <div class="li">
+                    <div class="ig"><label>Largura</label><input type="number" id="s-larg" value="4000" step="100"></div>
+                    <div class="ig"><label>Profund.</label><input type="number" id="s-prof" value="4000" step="100"></div>
+                </div>
+                <div class="li">
+                    <div class="ig"><label>Altura</label><input type="number" id="s-alt" value="2800" step="100"></div>
+                    <div class="ig"><label>Esp.Par</label><input type="number" id="s-esp" value="100" step="10"></div>
+                </div>
+                <div class="li">
+                    <div class="ig"><label>Teto</label><select id="s-teto">
+                            <option value="0" selected>Oculto</option>
+                            <option value="1">Visível</option>
+                        </select></div>
+                    <div class="ig"><label>Paredes</label><select id="s-npar">
+                            <option value="2" selected>2(L)</option>
+                            <option value="3">3(U)</option>
+                            <option value="4">4</option>
+                        </select></div>
+                </div>
+                <button class="bm b-par" id="btn-app-sala" style="margin-top:4px">✔ Aplicar</button>
+            </div>
+        </div>
+
+        <div id="area-3d">
+            <div id="aviso">Clique:Seleciona | DupClique:Edita Peça | Ctrl+Arraste:Ignora colisão</div>
+            <div id="status-bar">
+                <span id="st-sel">Selecionado: Nenhum</span>
+                <span id="st-pos">Pos: 0, 0, 0</span>
+                <span id="st-rot">Rot: 0</span>
+            </div>
+            <div id="bottom-tools">
+                <button class="bt-btn ativo" id="bt-colisao"><span class="ind"></span> Colisão</button>
+                <button class="bt-btn" id="bt-auto-reb">↕ Auto Rebaixar</button>
+            </div>
+        </div>
+
+        <div id="painel-ed">
+            <div id="ferr-titulo">🔧 <span id="ferr-nome-titulo">Propriedades</span></div>
+            <div id="ferr-abas">
+                <div class="ferr-aba ativo" data-tab="propriedades"><i>⚙️</i>Props</div>
+                <div class="ferr-aba" data-tab="aberturas"><i>🚪</i>Aberturas</div>
+                <div class="ferr-aba" data-tab="agregados"><i>📦</i>Agregados</div>
+                <div class="ferr-aba" data-tab="arranjo"><i>📐</i>Arranjo</div>
+                <div class="ferr-aba" data-tab="movimentacao"><i>✋</i>Mover</div>
+                <div class="ferr-aba" data-tab="posicionamento"><i>📍</i>Snap</div>
+            </div>
+
+            <!-- PROPRIEDADES -->
+            <div class="ferr-painel ativo" id="tab-propriedades">
+                <div class="sub-abas">
+                    <div class="sub-aba ativo" data-subtab="modulo">Módulo</div>
+                    <div class="sub-aba" data-subtab="materiais">Materiais</div>
+                </div>
+                <div id="subtab-modulo">
+                    <div class="prop-section aberto">
+                        <div class="prop-header"><span class="arr">▶</span> 📐 Dimensões</div>
+                        <div class="prop-body">
+                            <div class="prop-row"><span class="prop-lbl">Largura:</span>
+                                <div class="prop-val"><input type="number" id="ed-l" step="1"></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Altura:</span>
+                                <div class="prop-val"><input type="number" id="ed-a" step="1"></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl" id="lbl-p">Profundidade:</span>
+                                <div class="prop-val"><input type="number" id="ed-p" step="1"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prop-section aberto">
+                        <div class="prop-header"><span class="arr">▶</span> 🖼️ Info</div>
+                        <div class="prop-body">
+                            <div class="prop-img-box" id="prop-img-preview"><span style="color:#ccc;font-size:20px">?</span></div>
+                            <div id="gp-canto" style="display:none">
+                                <div class="prop-row"><span class="prop-lbl" style="color:#e74c3c">Comp. Dir.:</span>
+                                    <div class="prop-val"><input type="number" id="ed-la" step="1" title="Comprimento Direita"></div>
+                                </div>
+                                <div class="prop-row"><span class="prop-lbl" style="color:#3498db">Comp. Esq.:</span>
+                                    <div class="prop-val"><input type="number" id="ed-lb" step="1" title="Comprimento Esquerda"></div>
+                                </div>
+                                <div class="prop-row"><span class="prop-lbl" style="color:#e74c3c">Prof. Dir.:</span>
+                                    <div class="prop-val"><input type="number" id="ed-pa" step="1" title="Profundidade Direita"></div>
+                                </div>
+                                <div class="prop-row"><span class="prop-lbl" style="color:#3498db">Prof. Esq.:</span>
+                                    <div class="prop-val"><input type="number" id="ed-pb" step="1" title="Profundidade Esquerda"></div>
+                                </div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Puxador:</span>
+                                <div class="prop-val">
+                                    <select id="ed-pux">
+                                        <option value="perfil">Perfil</option>
+                                        <option value="cava">Cava (com desconto)</option>
+                                        <option value="nenhum">Nenhum</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Obs:</span>
+                                <div class="prop-val"><input type="text" id="ed-obs" placeholder="Observações"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prop-section aberto">
+                        <div class="prop-header"><span class="arr">▶</span> 📍 Posição</div>
+                        <div class="prop-body">
+                            <div class="prop-row"><span class="prop-lbl">X:</span>
+                                <div class="prop-val"><input type="number" id="ed-px" step="1"></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Z:</span>
+                                <div class="prop-val"><input type="number" id="ed-pz" step="1"></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl" style="color:#e67e22">↕ Elevação:</span>
+                                <div class="prop-val"><input type="number" id="ed-y" step="5"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prop-section" id="gp-esp">
+                        <div class="prop-header"><span class="arr">▶</span> 📏 Espessuras</div>
+                        <div class="prop-body">
+                            <div class="prop-row"><span class="prop-lbl">Interna:</span>
+                                <div class="prop-val"><input type="number" id="ed-ei" step="1"></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Externa:</span>
+                                <div class="prop-val"><input type="number" id="ed-ee" step="1"></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Fundo:</span>
+                                <div class="prop-val"><input type="number" id="ed-ef" step="1"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prop-section" id="gp-tpar" style="display:none">
+                        <div class="prop-header"><span class="arr">▶</span> 🧱 Parede</div>
+                        <div class="prop-body">
+                            <div class="prop-row"><span class="prop-lbl">Cor:</span>
+                                <div class="prop-val"><input type="color" id="ed-pcor" value="#ffffff" style="width:100%;height:28px;cursor:pointer"></div>
+                            </div>
+                            <button class="ba" id="btn-ptex" style="width:100%;margin-top:4px;background:#6c5ce7">🖼️ Textura</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="subtab-materiais" style="display:none">
+                    <div class="prop-section aberto" id="gp-cor">
+                        <div class="prop-header"><span class="arr">▶</span> 🎨 Cores</div>
+                        <div class="prop-body">
+                            <div class="prop-row"><span class="prop-lbl">Interna:</span>
+                                <div class="prop-val"><select id="ed-ci"></select></div>
+                            </div>
+                            <div class="prop-row"><span class="prop-lbl">Externa:</span>
+                                <div class="prop-val"><select id="ed-ce"></select></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="ba" id="btn-salvar" style="width:100%;margin-top:8px;background:#2ecc71;font-size:12px;padding:8px">✔ Aplicar</button>
+                <div class="prop-section aberto" style="margin-top:8px">
+                    <div class="prop-header"><span class="arr">▶</span> 🔧 Ferramentas</div>
+                    <div class="prop-body">
+                        <div class="btn-row"><button class="ba" id="btn-girar" style="background:#34495e">↻ Girar</button><button class="ba" id="btn-duplicar" style="background:#9b59b6">👯 Duplicar</button></div>
+                        <div class="btn-row"><button class="ba" id="btn-raiox" style="background:#f39c12">👻 Raio-X</button><button class="ba" id="btn-abrir" style="background:#16a085">🚪 Abrir</button></div>
+                        <div class="btn-row"><button class="ba" id="btn-explodir" style="background:#d35400">💣 Explodir</button></div>
+                        <button class="ba" id="btn-excluir" style="width:100%;background:#e74c3c;margin-top:4px">🗑️ Excluir</button>
+                    </div>
+                </div>
+                
+                <!-- Painel Peça -->
+                <div id="painel-peca">
+                    <div class="tp">🧩 PEÇA SELECIONADA</div>
+                    <div class="btn-row" style="margin-bottom: 5px;">
+                        <button class="ba" id="btn-mover-peca" style="background:#3498db">✋ Mover</button>
+                        <button class="ba" id="btn-girar-peca" style="background:#9b59b6">↻ Girar</button>
+                    </div>
+                    <div class="li"><div class="ig"><label>L</label><input type="number" id="ep-l" step="1"></div><div class="ig"><label>A</label><input type="number" id="ep-a" step="1"></div><div class="ig"><label>P</label><input type="number" id="ep-p" step="1"></div></div>
+                    <div class="li"><div class="ig"><label>X</label><input type="number" id="ep-px" step="1"></div><div class="ig"><label>Y</label><input type="number" id="ep-py" step="1"></div><div class="ig"><label>Z</label><input type="number" id="ep-pz" step="1"></div></div>
+                    <div class="li"><div class="ig"><label>RX (°)</label><input type="number" id="ep-rx" step="5"></div><div class="ig"><label>RY (°)</label><input type="number" id="ep-ry" step="5"></div><div class="ig"><label>RZ (°)</label><input type="number" id="ep-rz" step="5"></div></div>
+                    <div class="ig" style="margin-top:4px"><label>Cor</label><select id="ep-cor"></select></div>
+                    <button id="btn-salvar-peca">Aplicar Dimensões e Cor</button>
+                    <button id="btn-reset-peca">↺ Resetar Posição & Rotação</button>
+                </div>
+
+            </div>
+
+            <!-- ABERTURAS -->
+            <div class="ferr-painel" id="tab-aberturas">
+                <div class="prop-section aberto">
+                    <div class="prop-header"><span class="arr">▶</span> Controle de Aberturas</div>
+                    <div class="prop-body">
+                        <div id="aberturas-lista" style="font-size:10px;color:#666">Selecione um módulo</div>
+                        <div class="btn-row" style="margin-top:8px">
+                            <button class="ba" id="btn-abrir-tudo" style="background:#16a085">🚪 Abrir Tudo</button>
+                            <button class="ba" id="btn-fechar-tudo" style="background:#e74c3c">🔒 Fechar Tudo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AGREGADOS -->
+            <div class="ferr-painel" id="tab-agregados">
+                <div style="padding:6px;font-size:11px;font-weight:700;color:#444;background:#e8ebef;margin:-8px -8px 8px;padding:8px;border-bottom:1px solid #ccc">
+                    <span id="agr-nome-mod">Nenhum módulo</span>
+                </div>
+                <div id="agregados-lista"></div>
+            <button class="ba" id="btn-montagem" style="width:100%;margin-top:6px;background:#3498db;font-size:12px;padding:8px">🛠️ Montagem</button>
+            <div id="montagem-lista" style="margin-top:8px;padding:8px;background:#f8f9fa;border:1px solid #dde1e4;border-radius:4px;font-size:11px;color:#333;max-height:160px;overflow:auto;white-space:pre-wrap;"></div>
+            </div>
+
+            <!-- ARRANJO -->
+            <div class="ferr-painel" id="tab-arranjo">
+                <div class="arr-tabs">
+                    <div class="arr-tab ativo" data-arrt="linear">Linear</div>
+                    <div class="arr-tab" data-arrt="polar">Polar</div>
+                </div>
+                <div id="arr-linear">
+                    <div class="arr-axis"><span class="arr-axis-label x">X</span><input type="number" class="arr-val" id="arr-x-val" value="2" min="1"><span style="font-size:8px;color:#999">qtd</span></div>
+                    <div class="arr-axis"><span class="arr-axis-label z">Z</span><input type="number" class="arr-val" id="arr-z-val" value="1" min="1"><span style="font-size:8px;color:#999">qtd</span></div>
+                    <h4 style="font-size:10px;margin:10px 0 5px;color:#444">Incrementos (gap)</h4>
+                    <div class="arr-inc"><label class="arr-axis-label x">X</label><input type="number" id="arr-inc-x" value="0"></div>
+                    <div class="arr-inc"><label class="arr-axis-label z">Z</label><input type="number" id="arr-inc-z" value="0"></div>
+                </div>
+                <div id="arr-polar" style="display:none">
+                    <div class="prop-row"><span class="prop-lbl">Raio:</span>
+                        <div class="prop-val"><input type="number" id="arr-raio" value="500"></div>
+                    </div>
+                    <div class="prop-row"><span class="prop-lbl">Qtd:</span>
+                        <div class="prop-val"><input type="number" id="arr-pol-qtd" value="4" min="2"></div>
+                    </div>
+                    <div class="prop-row"><span class="prop-lbl">Ângulo:</span>
+                        <div class="prop-val"><input type="number" id="arr-pol-ang" value="360"></div>
+                    </div>
+                </div>
+                <button class="ba" id="btn-inserir-arr" style="background:var(--pri);width:100%;padding:7px;font-size:11px;margin-top:8px">📐 Inserir Arranjo</button>
+            </div>
+
+            <!-- MOVIMENTAÇÃO -->
+            <div class="ferr-painel" id="tab-movimentacao">
+                <div class="prop-section aberto">
+                    <div class="prop-header"><span class="arr">▶</span> Mover</div>
+                    <div class="prop-body">
+                        <div class="prop-row"><span class="prop-lbl">Passo:</span>
+                            <div class="prop-val"><input type="number" id="mov-passo" value="10" min="1"></div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:6px">
+                            <div></div><button class="ba" style="background:#e74c3c" id="mv-fwd">⬆</button>
+                            <div></div>
+                            <button class="ba" style="background:#3498db" id="mv-left">⬅</button>
+                            <div></div>
+                            <button class="ba" style="background:#3498db" id="mv-right">➡</button>
+                            <div></div><button class="ba" style="background:#e74c3c" id="mv-back">⬇</button>
+                            <div></div>
+                            <button class="ba" style="background:#27ae60" id="mv-up">↑</button>
+                            <div></div>
+                            <button class="ba" style="background:#27ae60" id="mv-down">↓</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="prop-section aberto">
+                    <div class="prop-header"><span class="arr">▶</span> Rotação</div>
+                    <div class="prop-body">
+                        <div class="prop-row"><span class="prop-lbl">Ângulo:</span>
+                            <div class="prop-val"><input type="number" id="rot-ang" value="90" step="15"></div>
+                        </div>
+                        <div class="btn-row">
+                            <button class="ba" id="rot-esq" style="background:#34495e">↺ Esq</button>
+                            <button class="ba" id="rot-dir" style="background:#34495e">↻ Dir</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- POSICIONAMENTO -->
+            <div class="ferr-painel" id="tab-posicionamento">
+                <div class="prop-section aberto">
+                    <div class="prop-header"><span class="arr">▶</span> Snap / Alinhar</div>
+                    <div class="prop-body">
+                        <div class="btn-row" style="flex-wrap:wrap">
+                            <button class="ba" id="snap-parede-fundo" style="background:#6c5ce7;flex:1 0 45%">⬆ Fundo</button>
+                            <button class="ba" id="snap-parede-esq" style="background:#6c5ce7;flex:1 0 45%">⬅ Esq</button>
+                            <button class="ba" id="snap-parede-dir" style="background:#6c5ce7;flex:1 0 45%">➡ Dir</button>
+                            <button class="ba" id="snap-chao" style="background:#27ae60;flex:1 0 45%">⬇ Chão</button>
+                            <button class="ba" id="snap-centro" style="background:#e67e22;flex:1 0 45%">⊕ Centro</button>
+                            <button class="ba" id="snap-canto-esq" style="background:#e74c3c;flex:1 0 45%">◤ Canto Esq</button>
+                            <button class="ba" id="snap-canto-dir" style="background:#e74c3c;flex:1 0 45%">◥ Canto Dir</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="prop-section aberto">
+                    <div class="prop-header"><span class="arr">▶</span> Alinhar com Outro</div>
+                    <div class="prop-body">
+                        <div class="btn-row" style="flex-wrap:wrap">
+                            <button class="ba" id="alin-adj-esq" style="background:#0984e3;flex:1 0 45%">◀▶ Adj Esq</button>
+                            <button class="ba" id="alin-adj-dir" style="background:#0984e3;flex:1 0 45%">▶◀ Adj Dir</button>
+                            <button class="ba" id="alin-empilhar" style="background:#0984e3;flex:1 0 45%">⬆⬆ Empilhar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAIS -->
+    <div id="modal-tex" class="mo">
+        <div class="mc">
+            <div class="mh">
+                <h2 id="mt-titulo">Textura</h2><button class="bf" onclick="document.getElementById('modal-tex').style.display='none'">Fechar</button>
+            </div>
+            <div class="mb">
+                <div id="mt-corpo"></div>
+                <div class="cu">
+                    <div class="ig" style="flex:1"><label>URL</label><input type="text" id="mt-url" placeholder="https://..."></div><button id="btn-mt-url">Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-bg" class="mo">
+        <div class="mc" style="max-width:450px;height:auto;max-height:60vh">
+            <div class="mh">
+                <h2>🌑 Fundo</h2><button class="bf" onclick="document.getElementById('modal-bg').style.display='none'">Fechar</button>
+            </div>
+            <div class="mb">
+                <div class="tg" id="bg-grid"></div>
+                <div style="margin-top:12px"><label style="font-size:11px;font-weight:700">Custom:</label><input type="color" id="bg-custom" value="#111111" style="width:100%;height:40px;cursor:pointer;margin-top:4px"></div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-parfix" class="mo">
+        <div class="mc" style="max-width:550px;height:auto;max-height:70vh">
+            <div class="mh">
+                <h2>🧱 Paredes Fixas</h2><button class="bf" onclick="document.getElementById('modal-parfix').style.display='none'">Fechar</button>
+            </div>
+            <div class="mb" id="parfix-corpo"></div>
+        </div>
+    </div>
+    <div id="modal-rel" class="mo">
+        <div class="mc">
+            <div class="mh">
+                <h2>📋 Matéria-Prima</h2><button class="bf" onclick="this.closest('.mo').style.display='none'">Fechar</button>
+            </div>
+            <div class="mb" id="rel-corpo"></div>
+        </div>
+    </div>
+    <div id="modal-orc" class="mo">
+        <div class="mc">
+            <div class="mh no-print">
+                <h2>💲 Proposta Comercial</h2><button class="bf" onclick="this.closest('.mo').style.display='none'">Fechar</button>
+            </div>
+            <div class="form-orc no-print"><input class="inp-cli" placeholder="Cliente" value="Cliente Exemplo"><input class="inp-amb" placeholder="Ambiente" value="Cozinha"><button class="btn-imp" onclick="imprimirEl('folha-orc')">🖨️ Imprimir/PDF</button></div>
+            <div class="mb" style="background:#fff">
+                <div id="folha-orc" class="folha-print">
+                    <div class="orc-titulo">Proposta de Orçamento</div>
+                    <div class="orc-meta">Cliente: <span class="out-cli"></span></div>
+                    <div class="orc-meta">Ambiente: <span class="out-amb"></span></div>
+                    <div class="orc-meta" id="out-cores">Cor Externa: - | Cor Interna: -</div>
+                    <table class="orc-tab">
+                        <thead>
+                            <tr>
+                                <th>Descrição</th>
+                                <th style="text-align:right;width:150px">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orc-tbody"></tbody>
+                    </table>
+                    <div class="ot-c">
+                        <div class="ot-t">VALOR TOTAL:</div>
+                        <div class="ot-v" id="orc-total">R$ 0,00</div>
+                    </div>
+                    <div class="orc-termos"><strong>Termos:</strong><br>1. Válido 15 dias.<br>2. 50% entrada e 50% entrega.<br>3. Prazo: 30 dias úteis.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-prod" class="mo">
+        <div class="mc">
+            <div class="mh no-print">
+                <h2>📝 Produção</h2><button class="bf" onclick="this.closest('.mo').style.display='none'">Fechar</button>
+            </div>
+            <div class="form-orc no-print"><input class="inp-cli" placeholder="Cliente" value="Cliente Exemplo"><input class="inp-amb" placeholder="Ambiente" value="Cozinha"><button class="btn-imp" onclick="imprimirEl('folha-prod')">🖨️ Imprimir/PDF</button></div>
+            <div class="mb" style="background:#fff">
+                <div id="folha-prod" class="folha-print">
+                    <div class="orc-titulo">Lista de Produção</div>
+                    <div class="orc-meta" style="margin-bottom:25px">Projeto: <span class="out-cli"></span> - <span class="out-amb"></span></div>
+                    <div id="prod-corpo"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/banco.js"></script>
+    <script type="module" src="js/script.js"></script>
+
+    <hr>
+    <div id="painel-downloads"></div>
+    <hr>
+    <form id="form-upload" enctype="multipart/form-data">
+        <input type="file" name="arquivo" />
+        <button type="submit">Enviar</button>
+    </form>
+    <script>
+    // Listar arquivos para download
+    async function listarArquivos(tipo) {
+        const resposta = await fetch(`/api/listar-arquivos?dir=output/${tipo}`);
+        const arquivos = await resposta.json();
+        const painel = document.getElementById('painel-downloads');
+        painel.innerHTML = `<h3>Arquivos ${tipo}:</h3><ul>` +
+            arquivos.map(arq => `<li><a href="output/${tipo}/${arq}" download>${arq}</a></li>`).join('') +
+            '</ul>';
+    }
+    // Exemplo: listar arquivos PDF ao carregar
+    listarArquivos('pdf');
+
+    // Upload de arquivos
+    document.getElementById('form-upload').onsubmit = async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await resp.json();
+        alert(data.ok ? 'Upload realizado!' : 'Erro no upload');
+        listarArquivos('import'); // Atualiza lista de uploads
+    };
+
+    // Registrar log de exportação (exemplo de uso)
+    async function registrarExportacao(usuario, tipo, nomeArquivo) {
+        await fetch('/api/log-export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, tipo, nomeArquivo })
+        });
+    }
+    </script>
+</body>
+
+</html>

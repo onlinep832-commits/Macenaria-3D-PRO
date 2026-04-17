@@ -1,0 +1,39 @@
+name: CI - Testes e Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+      - name: Instalar dependências
+        run: npm install
+      - name: Rodar testes
+        run: |
+          if [ -f package.json ] && grep -q '"test"' package.json; then
+            npm test
+          else
+            echo "Sem testes configurados."
+          fi
+
+  # Exemplo de deploy para o Netlify via CLI (opcional, se quiser deploy por aqui)
+  # deploy:
+  #   needs: build-and-test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout código
+  #       uses: actions/checkout@v4
+  #     - name: Instalar Netlify CLI
+  #       run: npm install -g netlify-cli
+  #     - name: Deploy no Netlify
+  #       run: netlify deploy --prod --dir=public --auth=${{ secrets.NETLIFY_AUTH_TOKEN }} --site=${{ secrets.NETLIFY_SITE_ID }}
